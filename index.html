@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestionale Spese Familiari</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .modal-backdrop { background-color: rgba(0,0,0,0.6); }
+    </style>
+</head>
+<body class="bg-gray-100">
+
+    <!-- Sidebar Backdrop -->
+    <div id="reportsBackdrop" class="fixed inset-0 bg-black/50 z-30 hidden"></div>
+
+    <div class="container mx-auto p-4 md:p-6">
+        <!-- Header -->
+        <header class="mb-8 pb-4 border-b border-gray-300">
+            <div class="flex justify-between items-start">
+                <div>
+                    <h1 class="text-3xl font-bold text-indigo-700">Gestionale Spese</h1>
+                     <div id="auth-container" class="mt-2">
+                        <button id="authorize_button" class="bg-white hover:bg-gray-100 text-gray-800 font-semibold py-2 px-4 border border-gray-400 rounded shadow hidden">
+                            <i class="fab fa-google mr-2"></i> Accedi con Google
+                        </button>
+                        <div id="user_info" class="hidden items-center space-x-2 text-sm">
+                            <span id="user_name" class="font-semibold"></span>
+                            <button id="signout_button" class="text-red-500 hover:underline">(esci)</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div id="sync-status" class="flex items-center space-x-2 text-sm text-gray-600">
+                        <div id="sync-status-dot" class="sync-status-dot sync-offline"></div>
+                        <span id="sync-status-text">Offline</span>
+                    </div>
+                    <button id="toggleReportsBtn" class="p-2 rounded-md hover:bg-gray-200">
+                        <i class="fas fa-chart-pie fa-lg text-gray-600"></i>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main>
+            <!-- Balances -->
+            <section id="balances" class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                <div class="bg-white p-6 rounded-xl shadow-md">
+                    <h2 class="text-lg font-semibold text-gray-500">Liquidità Settimanale</h2>
+                    <p id="weeklyBalance" class="text-4xl font-bold text-green-600 mt-2">€0.00</p>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-md">
+                    <h2 class="text-lg font-semibold text-gray-500">Liquidità Mensile</h2>
+                    <p id="monthlyBalance" class="text-4xl font-bold text-blue-600 mt-2">€0.00</p>
+                </div>
+            </section>
+
+            <!-- Actions -->
+            <section class="mb-8 flex flex-wrap gap-4">
+                <button id="addWeeklyIncomeBtn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg flex items-center shadow-sm">
+                    <i class="fas fa-plus-circle mr-2"></i> Aggiungi Entrata Sett. (€100)
+                </button>
+                 <button id="addMonthlyIncomeBtn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-lg flex items-center shadow-sm">
+                    <i class="fas fa-plus-circle mr-2"></i> Aggiungi Entrata Mens. (€400)
+                </button>
+                <button id="addExpenseBtn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-lg flex items-center shadow-sm">
+                    <i class="fas fa-minus-circle mr-2"></i> Aggiungi Spesa
+                </button>
+            </section>
+
+            <!-- Transactions List -->
+            <section class="bg-white p-6 rounded-xl shadow-md mb-8">
+                <h2 class="text-2xl font-bold text-gray-800 mb-4">Ultime Transazioni</h2>
+                <div id="transactionsList" class="space-y-3 max-h-96 overflow-y-auto">
+                    <!-- Transactions will be populated here -->
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Reports Sidebar -->
+    <div id="reportsSidebar" class="fixed top-0 right-0 h-full w-full max-w-2xl bg-gray-50 z-40 transform translate-x-full transition-transform duration-300 ease-in-out p-6 overflow-y-auto">
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-2xl font-bold text-gray-800">Riepilogo Spese</h2>
+            <button id="closeReportsBtn" class="p-2 rounded-md hover:bg-gray-200">
+                <i class="fas fa-times fa-lg text-gray-600"></i>
+            </button>
+        </div>
+        <div class="space-y-8">
+             <!-- Summary Table -->
+            <div>
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-100">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Categoria</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Da €100</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Da €400</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Totale</th>
+                        </tr>
+                    </thead>
+                    <tbody id="summaryTableBody" class="bg-white divide-y divide-gray-200"></tbody>
+                </table>
+            </div>
+            <!-- Charts -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
+                 <div class="text-center p-4 bg-white rounded-lg shadow">
+                    <h3 class="font-semibold text-gray-600 mb-2">Spese da €100</h3>
+                    <canvas id="weeklyChart"></canvas>
+                </div>
+                 <div class="text-center p-4 bg-white rounded-lg shadow">
+                    <h3 class="font-semibold text-gray-600 mb-2">Spese da €400</h3>
+                    <canvas id="monthlyChart"></canvas>
+                </div>
+                 <div class="text-center p-4 bg-white rounded-lg shadow">
+                    <h3 class="font-semibold text-gray-600 mb-2">Spese Totali</h3>
+                    <canvas id="totalChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Expense Modal -->
+    <div id="expenseModal" class="fixed inset-0 z-50 items-center justify-center hidden modal-backdrop">
+        <div class="bg-white rounded-lg shadow-2xl p-6 w-full max-w-lg m-4">
+            <h2 id="expenseModalTitle" class="text-2xl font-bold mb-4">Aggiungi Spesa</h2>
+            <form id="expenseForm">
+                <input type="hidden" id="expenseId">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="expenseAmount" class="block text-sm font-medium text-gray-700">Importo (€)</label>
+                        <input id="expenseAmount" type="number" step="0.01" placeholder="Es. 15.50" class="w-full mt-1 px-4 py-2 border rounded-lg" required>
+                    </div>
+                     <div>
+                        <label for="expenseDate" class="block text-sm font-medium text-gray-700">Data</label>
+                        <input id="expenseDate" type="date" class="w-full mt-1 px-4 py-2 border rounded-lg" required>
+                    </div>
+                    <div>
+                        <label for="expenseCategory" class="block text-sm font-medium text-gray-700">Categoria</label>
+                        <select id="expenseCategory" class="w-full mt-1 px-4 py-2 border rounded-lg" required></select>
+                    </div>
+                    <div>
+                        <label for="expenseFund" class="block text-sm font-medium text-gray-700">Fonte Liquidità</label>
+                        <select id="expenseFund" class="w-full mt-1 px-4 py-2 border rounded-lg" required>
+                            <option value="weekly">Settimanale (€100)</option>
+                            <option value="monthly">Mensile (€400)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <label for="expenseNotes" class="block text-sm font-medium text-gray-700">Note</label>
+                    <textarea id="expenseNotes" rows="2" class="w-full mt-1 px-4 py-2 border rounded-lg"></textarea>
+                </div>
+                <div class="flex justify-between items-center mt-6">
+                    <button type="button" id="deleteExpenseBtn" class="text-red-500 hover:text-red-700 hidden">Elimina Spesa</button>
+                    <div class="space-x-3">
+                         <button type="button" id="cancelExpenseBtn" class="bg-gray-300 hover:bg-gray-400 font-bold py-2 px-4 rounded-lg">Annulla</button>
+                        <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">Salva</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Generic Confirmation Modal -->
+     <div id="confirmActionModal" class="fixed inset-0 z-50 items-center justify-center hidden modal-backdrop">
+        <div class="bg-white rounded-lg shadow-2xl p-6 w-full max-w-sm m-4 text-center">
+            <h2 id="confirmActionTitle" class="text-xl font-bold mb-4"></h2>
+            <p id="confirmActionMessage" class="mb-6"></p>
+            <div class="flex justify-end space-x-4">
+                <button id="confirmActionCancel" class="bg-gray-300 hover:bg-gray-400 font-bold py-2 px-4 rounded-lg">Annulla</button>
+                <button id="confirmActionOk" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Conferma</button>
+            </div>
+        </div>
+    </div>
+
+
+    <script src="https://apis.google.com/js/api.js"></script>
+    <script type="module">
+        // #############################################################################
+        // ### CONFIGURAZIONE - INCOLLA QUI LE TUE CHIAVI                           ###
+        // #############################################################################
+        const API_KEY = 'AIzaSyDzAzRi-MVwCX8e1-a4b-ag9KfZdZsBfWI'; 
+        const CLIENT_ID = '999092828800-342l4shrm85f00bdigvn8q78rkufh7fh.apps.googleusercontent.com';
+        // #############################################################################
+        const DISCOVERY_DOCS = ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"];
+        const SCOPES = 'https://www.googleapis.com/auth/drive.file';
+        const DRIVE_FILENAME = 'spese-famiglia-data.json';
+        const LOCAL_STORAGE_KEY = 'spese-famiglia-data-local';
+
+        const EXPENSE_CATEGORIES = [
+            { name: "Spesa Supermercato", color: "#36A2EB" },
+            { name: "Elisa", color: "#FF6384" },
+            { name: "Matteo", color: "#FFCE56" },
+            { name: "Igiene casa", color: "#4BC0C0" },
+            { name: "Regali", color: "#9966FF" },
+            { name: "Aurelia", color: "#FF9F40" },
+            { name: "Altro", color: "#C9CBCF" }
+        ];
+        
+        let tokenClient;
+        let driveFileId = null;
+        let state = { lastModified: 0, transactions: [] };
+        
+        let weeklyChart, monthlyChart, totalChart;
+        let ui;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            ui = {
+                authorizeButton: document.getElementById('authorize_button'),
+                signoutButton: document.getElementById('signout_button'),
+                userInfoDiv: document.getElementById('user_info'),
+                userNameSpan: document.getElementById('user_name'),
+                syncStatusDot: document.getElementById('sync-status-dot'),
+                syncStatusText: document.getElementById('sync-status-text'),
+                addWeeklyIncomeBtn: document.getElementById('addWeeklyIncomeBtn'),
+                addMonthlyIncomeBtn: document.getElementById('addMonthlyIncomeBtn'),
+                addExpenseBtn: document.getElementById('addExpenseBtn'),
+                expenseModal: document.getElementById('expenseModal'),
+                expenseForm: document.getElementById('expenseForm'),
+                expenseModalTitle: document.getElementById('expenseModalTitle'),
+                expenseIdInput: document.getElementById('expenseId'),
+                expenseAmountInput: document.getElementById('expenseAmount'),
+                expenseDateInput: document.getElementById('expenseDate'),
+                expenseCategorySelect: document.getElementById('expenseCategory'),
+                expenseFundSelect: document.getElementById('expenseFund'),
+                expenseNotesInput: document.getElementById('expenseNotes'),
+                cancelExpenseBtn: document.getElementById('cancelExpenseBtn'),
+                deleteExpenseBtn: document.getElementById('deleteExpenseBtn'),
+                transactionsList: document.getElementById('transactionsList'),
+                weeklyBalanceEl: document.getElementById('weeklyBalance'),
+                monthlyBalanceEl: document.getElementById('monthlyBalance'),
+                summaryTableBody: document.getElementById('summaryTableBody'),
+                toggleReportsBtn: document.getElementById('toggleReportsBtn'),
+                reportsSidebar: document.getElementById('reportsSidebar'),
+                reportsBackdrop: document.getElementById('reportsBackdrop'),
+                closeReportsBtn: document.getElementById('closeReportsBtn')
+            };
+            
+            Chart.register(ChartDataLabels);
+            populateCategories();
+            loadStateFromLocal();
+            refreshUI();
+            
+            gapi.load('client', initializeGapiClient);
+            const script = document.createElement('script');
+            script.src = 'https://accounts.google.com/gsi/client';
+            script.async = true; script.defer = true;
+            script.onload = initializeGis;
+            document.body.appendChild(script);
+
+            setupEventListeners();
+        });
+        
+        // --- AUTH & SYNC ---
+        async function initializeGapiClient() { await gapi.client.init({ apiKey: API_KEY, discoveryDocs: DISCOVERY_DOCS }); }
+        function initializeGis() { tokenClient = google.accounts.oauth2.initTokenClient({ client_id: CLIENT_ID, scope: SCOPES, callback: handleTokenResponse, error_callback: handleGisError, }); tokenClient.requestAccessToken({prompt: 'none'}); }
+        async function handleTokenResponse(resp) { if (resp.error) { return; } gapi.client.setToken(resp); updateSigninStatus(true); await syncWithDrive(); }
+        function handleGisError(error) { console.log('Silent login failed.', error); updateSigninStatus(false); }
+        function handleAuthClick() { if (tokenClient) { if (gapi.client.getToken() === null) { tokenClient.requestAccessToken({prompt: 'consent'}); } else { tokenClient.requestAccessToken({prompt: ''}); } } }
+        function handleSignoutClick() { const token = gapi.client.getToken(); if (token !== null) { google.accounts.oauth2.revoke(token.access_token, () => { gapi.client.setToken(null); updateSigninStatus(false); }); } }
+        function updateSigninStatus(isSignedIn) { ui.authorizeButton.classList.toggle('hidden', isSignedIn); ui.userInfoDiv.classList.toggle('hidden', !isSignedIn); if (isSignedIn) { gapi.client.request({ path: 'https://www.googleapis.com/oauth2/v1/userinfo' }).then(response => { ui.userNameSpan.textContent = `Ciao, ${response.result.given_name}`; }); } else { ui.userNameSpan.textContent = ''; driveFileId = null; updateSyncStatus('offline'); } }
+        async function findOrCreateDriveFile() { const response = await gapi.client.drive.files.list({ q: `name='${DRIVE_FILENAME}' and trashed=false`, spaces: 'drive', fields: 'files(id, name)', }); if (response.result.files.length > 0) { return response.result.files[0].id; } const createResponse = await gapi.client.drive.files.create({ resource: { name: DRIVE_FILENAME, appProperties: {isFamilyExpenseApp: 'true'}, parents: ['root'] }, fields: 'id', }); return createResponse.result.id; }
+        async function loadFromDrive(fileId) { try { const response = await gapi.client.drive.files.get({ fileId, alt: 'media' }); return response.result; } catch (e) { console.error("Error loading from Drive:", e); return null; } }
+        async function saveToDrive(fileId, content) { updateSyncStatus('online'); const boundary = '-------314159265358979323846'; const multipartRequestBody = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name: DRIVE_FILENAME, mimeType: 'application/json' })}\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(content)}\r\n--${boundary}--`; try { await gapi.client.request({ path: `/upload/drive/v3/files/${fileId}`, method: 'PATCH', params: { uploadType: 'multipart' }, headers: { 'Content-Type': `multipart/related; boundary="${boundary}"` }, body: multipartRequestBody }); updateSyncStatus('synced'); } catch (error) { console.error("Error saving to Drive:", error); updateSyncStatus('offline'); } }
+        async function syncWithDrive() { if (!gapi.client.getToken()) return; updateSyncStatus('online'); if (!driveFileId) driveFileId = await findOrCreateDriveFile(); const driveData = await loadFromDrive(driveFileId); const localData = getStateFromLocal(); if (driveData && (!localData || driveData.lastModified > localData.lastModified)) { state = driveData; } saveState(); refreshUI(); }
+        function updateSyncStatus(status) { ui.syncStatusDot.className = 'sync-status-dot'; const statuses = { offline: { class: 'sync-offline', text: 'Offline' }, online: { class: 'sync-online', text: 'Sincronizzazione...' }, synced: { class: 'sync-synced', text: 'Sincronizzato' } }; ui.syncStatusDot.classList.add(statuses[status].class); ui.syncStatusText.textContent = statuses[status].text; }
+        function loadStateFromLocal() { const storedState = localStorage.getItem(LOCAL_STORAGE_KEY); if (storedState) state = JSON.parse(storedState); }
+        function getStateFromLocal() { return JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY)) || { lastModified: 0, transactions: [] }; }
+        function saveState() { state.lastModified = Date.now(); localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state)); if (gapi.client.getToken() && driveFileId) { saveToDrive(driveFileId, state); } }
+
+        // --- UI & CORE APP LOGIC ---
+        function refreshUI() {
+            renderBalances();
+            renderTransactions();
+            renderSummary();
+        }
+
+        function renderBalances() {
+            let weekly = 0;
+            let monthly = 0;
+            state.transactions.forEach(t => {
+                const amount = parseFloat(t.amount) || 0;
+                if(t.type === 'income') {
+                    if(t.fund === 'weekly') weekly += amount;
+                    else monthly += amount;
+                } else { // expense
+                    if(t.fund === 'weekly') weekly -= amount;
+                    else monthly -= amount;
+                }
+            });
+            ui.weeklyBalanceEl.textContent = `€${weekly.toFixed(2)}`;
+            ui.monthlyBalanceEl.textContent = `€${monthly.toFixed(2)}`;
+        }
+
+        function renderTransactions() {
+            ui.transactionsList.innerHTML = '';
+            if (state.transactions.length === 0) {
+                ui.transactionsList.innerHTML = '<p class="text-gray-500 text-center">Nessuna transazione registrata.</p>';
+                return;
+            }
+            const sorted = [...state.transactions].sort((a,b) => new Date(b.date) - new Date(a.date));
+            sorted.slice(0, 20).forEach(t => {
+                const isExpense = t.type === 'expense';
+                const category = EXPENSE_CATEGORIES.find(c => c.name === t.category);
+                const borderColor = isExpense ? (category ? category.color : '#9CA3AF') : (t.fund === 'weekly' ? '#22C55E' : '#3B82F6');
+                
+                const div = document.createElement('div');
+                div.className = `p-3 rounded-lg flex items-center justify-between border-l-4`;
+                div.style.borderColor = borderColor;
+                div.style.backgroundColor = `${borderColor}20`;
+                
+                let description = isExpense 
+                    ? `<span class="font-semibold">${t.category}</span><p class="text-xs text-gray-500">${t.notes || ''}</p>`
+                    : `<span class="font-semibold">Entrata ${t.fund === 'weekly' ? 'Settimanale' : 'Mensile'}</span>`;
+                
+                div.innerHTML = `
+                    <div class="flex items-center space-x-3 flex-grow cursor-pointer" data-id="${t.id}">
+                        <i class="fas ${isExpense ? 'fa-arrow-down' : 'fa-arrow-up'}" style="color:${borderColor}"></i>
+                        <div>
+                           ${description}
+                        </div>
+                    </div>
+                    <div class="text-right flex items-center">
+                        <div class="mr-2">
+                            <p class="font-bold text-lg" style="color:${isExpense ? '#DC2626' : '#16A34A'}">
+                                ${isExpense ? '-' : '+'}€${parseFloat(t.amount).toFixed(2)}
+                            </p>
+                            <p class="text-xs text-gray-400">${new Date(t.date).toLocaleDateString('it-IT')}</p>
+                        </div>
+                         <button data-id="${t.id}" class="delete-transaction-btn text-gray-400 hover:text-red-500 p-2"><i class="fas fa-times"></i></button>
+                    </div>
+                `;
+                ui.transactionsList.appendChild(div);
+            });
+        }
+        
+        function renderSummary() {
+            const summary = {};
+            EXPENSE_CATEGORIES.forEach(cat => {
+                summary[cat.name] = { weekly: 0, monthly: 0, total: 0, color: cat.color };
+            });
+
+            state.transactions.filter(t => t.type === 'expense').forEach(t => {
+                if (summary[t.category]) {
+                    const amount = parseFloat(t.amount) || 0;
+                    summary[t.category][t.fund] += amount;
+                    summary[t.category].total += amount;
+                }
+            });
+
+            ui.summaryTableBody.innerHTML = '';
+            for (const category in summary) {
+                const data = summary[category];
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap font-medium text-gray-900 flex items-center"><div class="w-4 h-4 rounded-full mr-3" style="background-color:${data.color}"></div>${category}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right text-gray-500">€${data.weekly.toFixed(2)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right text-gray-500">€${data.monthly.toFixed(2)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right font-bold text-gray-800">€${data.total.toFixed(2)}</td>
+                `;
+                ui.summaryTableBody.appendChild(row);
+            }
+            renderCharts(summary);
+        }
+        
+        function renderCharts(summary) {
+            const chartData = {
+                weekly: { labels: [], data: [], colors: [] },
+                monthly: { labels: [], data: [], colors: [] },
+                total: { labels: [], data: [], colors: [] },
+            };
+
+            for (const category in summary) {
+                if (summary[category].weekly > 0) {
+                    chartData.weekly.labels.push(category);
+                    chartData.weekly.data.push(summary[category].weekly);
+                    chartData.weekly.colors.push(summary[category].color);
+                }
+                if (summary[category].monthly > 0) {
+                    chartData.monthly.labels.push(category);
+                    chartData.monthly.data.push(summary[category].monthly);
+                    chartData.monthly.colors.push(summary[category].color);
+                }
+                if (summary[category].total > 0) {
+                    chartData.total.labels.push(category);
+                    chartData.total.data.push(summary[category].total);
+                    chartData.total.colors.push(summary[category].color);
+                }
+            }
+            
+            if (weeklyChart) weeklyChart.destroy();
+            weeklyChart = new Chart(document.getElementById('weeklyChart'), createChartConfig(chartData.weekly.labels, chartData.weekly.data, chartData.weekly.colors));
+            
+            if (monthlyChart) monthlyChart.destroy();
+            monthlyChart = new Chart(document.getElementById('monthlyChart'), createChartConfig(chartData.monthly.labels, chartData.monthly.data, chartData.monthly.colors));
+            
+            if (totalChart) totalChart.destroy();
+            totalChart = new Chart(document.getElementById('totalChart'), createChartConfig(chartData.total.labels, chartData.total.data, chartData.total.colors));
+        }
+
+        function createChartConfig(labels, data, colors) {
+            const hasData = data.some(d => d > 0);
+            return {
+                type: 'pie',
+                data: {
+                    labels: hasData ? labels : ["Nessuna spesa"],
+                    datasets: [{
+                        data: hasData ? data : [1],
+                        backgroundColor: hasData ? colors : ['#E5E7EB'],
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { display: false },
+                        datalabels: {
+                            display: hasData,
+                            formatter: (value, ctx) => {
+                                let sum = ctx.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
+                                let percentage = (value * 100 / sum).toFixed(1) + "%";
+                                const label = ctx.chart.data.labels[ctx.dataIndex];
+                                return `${label}\n€${value.toFixed(2)} (${percentage})`;
+                            },
+                            color: '#fff',
+                            font: { weight: 'bold', size: 10 },
+                            textStrokeColor: '#333',
+                            textStrokeWidth: 2,
+                        }
+                    }
+                }
+            }
+        }
+        
+        function populateCategories() {
+            ui.expenseCategorySelect.innerHTML = '<option value="" disabled selected>Scegli categoria...</option>';
+            EXPENSE_CATEGORIES.forEach(cat => {
+                ui.expenseCategorySelect.innerHTML += `<option value="${cat.name}">${cat.name}</option>`;
+            });
+        }
+
+        function openExpenseModal(expense = null) {
+            ui.expenseForm.reset();
+            ui.expenseIdInput.value = expense ? expense.id : '';
+            ui.expenseModalTitle.textContent = expense ? 'Modifica Spesa' : 'Aggiungi Spesa';
+            ui.deleteExpenseBtn.classList.toggle('hidden', !expense);
+
+            if(expense) {
+                ui.expenseAmountInput.value = expense.amount;
+                ui.expenseDateInput.value = expense.date;
+                ui.expenseCategorySelect.value = expense.category;
+                ui.expenseFundSelect.value = expense.fund;
+                ui.expenseNotesInput.value = expense.notes;
+            } else {
+                ui.expenseDateInput.valueAsDate = new Date();
+            }
+            ui.expenseModal.style.display = 'flex';
+        }
+        function closeExpenseModal() { ui.expenseModal.style.display = 'none'; }
+        
+        function handleAddIncome(fund, amount) {
+            const newIncome = {
+                id: crypto.randomUUID(),
+                type: 'income',
+                fund: fund,
+                amount: amount,
+                date: new Date().toISOString().split('T')[0]
+            };
+            state.transactions.push(newIncome);
+            saveState();
+            refreshUI();
+        }
+
+        async function handleDeleteTransaction(transactionId) {
+            const transaction = state.transactions.find(t => t.id === transactionId);
+            if (!transaction) return;
+
+            const message = `Sei sicuro di voler eliminare questa transazione (${transaction.type === 'income' ? 'Entrata' : 'Spesa'}) di €${parseFloat(transaction.amount).toFixed(2)}?`;
+            
+            const confirmed = await confirmAction('Conferma Eliminazione', message);
+
+            if (confirmed) {
+                state.transactions = state.transactions.filter(t => t.id !== transactionId);
+                saveState();
+                refreshUI();
+                closeExpenseModal();
+            }
+        }
+        
+        async function confirmAction(title, message) {
+            const modal = document.getElementById('confirmActionModal');
+            document.getElementById('confirmActionTitle').textContent = title;
+            document.getElementById('confirmActionMessage').textContent = message;
+            modal.style.display = 'flex';
+            
+            return new Promise((resolve) => {
+                document.getElementById('confirmActionOk').onclick = () => {
+                    modal.style.display = 'none';
+                    resolve(true);
+                };
+                document.getElementById('confirmActionCancel').onclick = () => {
+                    modal.style.display = 'none';
+                    resolve(false);
+                };
+            });
+        }
+
+
+        function toggleReportsSidebar() {
+            ui.reportsSidebar.classList.toggle('translate-x-full');
+            ui.reportsBackdrop.classList.toggle('hidden');
+        }
+
+        // --- EVENT LISTENERS ---
+        function setupEventListeners() {
+            ui.authorizeButton.onclick = handleAuthClick;
+            ui.signoutButton.onclick = handleSignoutClick;
+            ui.addWeeklyIncomeBtn.onclick = () => handleAddIncome('weekly', 100);
+            ui.addMonthlyIncomeBtn.onclick = () => handleAddIncome('monthly', 400);
+            ui.addExpenseBtn.onclick = () => openExpenseModal();
+            ui.cancelExpenseBtn.onclick = closeExpenseModal;
+            ui.toggleReportsBtn.onclick = toggleReportsSidebar;
+            ui.closeReportsBtn.onclick = toggleReportsSidebar;
+            ui.reportsBackdrop.onclick = toggleReportsSidebar;
+            
+            ui.transactionsList.addEventListener('click', (e) => {
+                const deleteBtn = e.target.closest('.delete-transaction-btn');
+                if (deleteBtn) {
+                    e.stopPropagation();
+                    handleDeleteTransaction(deleteBtn.dataset.id);
+                    return;
+                }
+
+                const transactionRow = e.target.closest('[data-id]');
+                if (transactionRow) {
+                    const transaction = state.transactions.find(t => t.id === transactionRow.dataset.id);
+                    if (transaction && transaction.type === 'expense') {
+                        openExpenseModal(transaction);
+                    }
+                }
+            });
+
+            ui.expenseForm.onsubmit = (e) => {
+                e.preventDefault();
+                const id = ui.expenseIdInput.value;
+                const expenseData = {
+                    id: id || crypto.randomUUID(),
+                    type: 'expense',
+                    amount: ui.expenseAmountInput.value,
+                    date: ui.expenseDateInput.value,
+                    category: ui.expenseCategorySelect.value,
+                    fund: ui.expenseFundSelect.value,
+                    notes: ui.expenseNotesInput.value.trim()
+                };
+                if (!expenseData.amount || !expenseData.category) return;
+                
+                if (id) { // Update
+                    state.transactions = state.transactions.map(t => t.id === id ? expenseData : t);
+                } else { // Create
+                    state.transactions.push(expenseData);
+                }
+                saveState();
+                refreshUI();
+                closeExpenseModal();
+            };
+
+            ui.deleteExpenseBtn.onclick = () => {
+                handleDeleteTransaction(ui.expenseIdInput.value);
+            };
+        }
+    </script>
+</body>
+</html>
