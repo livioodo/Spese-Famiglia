@@ -23,23 +23,9 @@
         <!-- Header -->
         <header class="mb-8 pb-4 border-b border-gray-300">
             <div class="flex justify-between items-start">
-                <div>
-                    <h1 class="text-3xl font-bold text-indigo-700">Gestionale Spese</h1>
-                     <div id="auth-container" class="mt-2">
-                        <button id="authorize_button" class="bg-white hover:bg-gray-100 text-gray-800 font-semibold py-2 px-4 border border-gray-400 rounded shadow hidden">
-                            <i class="fab fa-google mr-2"></i> Accedi con Google
-                        </button>
-                        <div id="user_info" class="hidden items-center space-x-2 text-sm">
-                            <span id="user_name" class="font-semibold"></span>
-                            <button id="signout_button" class="text-red-500 hover:underline">(esci)</button>
-                        </div>
-                    </div>
-                </div>
+                <h1 class="text-3xl font-bold text-indigo-700">Gestionale Spese</h1>
                 <div class="flex items-center space-x-4">
-                    <div id="sync-status" class="flex items-center space-x-2 text-sm text-gray-600">
-                        <div id="sync-status-dot" class="sync-status-dot sync-offline"></div>
-                        <span id="sync-status-text">Offline</span>
-                    </div>
+                    <div class="text-sm text-gray-500">Dati salvati su questo dispositivo</div>
                     <button id="toggleReportsBtn" class="p-2 rounded-md hover:bg-gray-200">
                         <i class="fas fa-chart-pie fa-lg text-gray-600"></i>
                     </button>
@@ -180,18 +166,8 @@
     </div>
 
 
-    <script src="https://apis.google.com/js/api.js"></script>
     <script type="module">
-        // #############################################################################
-        // ### CONFIGURAZIONE - INCOLLA QUI LE TUE CHIAVI                           ###
-        // #############################################################################
-        const API_KEY = 'AIzaSyDzAzRi-MVwCX8e1-a4b-ag9KfZdZsBfWI'; 
-        const CLIENT_ID = '999092828800-342l4shrm85f00bdigvn8q78rkufh7fh.apps.googleusercontent.com';
-        // #############################################################################
-        const DISCOVERY_DOCS = ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"];
-        const SCOPES = 'https://www.googleapis.com/auth/drive.file';
-        const DRIVE_FILENAME = 'spese-famiglia-data.json';
-        const LOCAL_STORAGE_KEY = 'spese-famiglia-data-local';
+        const LOCAL_STORAGE_KEY = 'spese-famiglia-data-v2';
 
         const EXPENSE_CATEGORIES = [
             { name: "Spesa Supermercato", color: "#36A2EB" },
@@ -203,21 +179,13 @@
             { name: "Altro", color: "#C9CBCF" }
         ];
         
-        let tokenClient;
-        let driveFileId = null;
-        let state = { lastModified: 0, transactions: [] };
+        let state = { transactions: [] };
         
         let weeklyChart, monthlyChart, totalChart;
         let ui;
 
         document.addEventListener('DOMContentLoaded', () => {
             ui = {
-                authorizeButton: document.getElementById('authorize_button'),
-                signoutButton: document.getElementById('signout_button'),
-                userInfoDiv: document.getElementById('user_info'),
-                userNameSpan: document.getElementById('user_name'),
-                syncStatusDot: document.getElementById('sync-status-dot'),
-                syncStatusText: document.getElementById('sync-status-text'),
                 addWeeklyIncomeBtn: document.getElementById('addWeeklyIncomeBtn'),
                 addMonthlyIncomeBtn: document.getElementById('addMonthlyIncomeBtn'),
                 addExpenseBtn: document.getElementById('addExpenseBtn'),
@@ -246,35 +214,18 @@
             populateCategories();
             loadStateFromLocal();
             refreshUI();
-            
-            gapi.load('client', initializeGapiClient);
-            const script = document.createElement('script');
-            script.src = 'https://accounts.google.com/gsi/client';
-            script.async = true; script.defer = true;
-            script.onload = initializeGis;
-            document.body.appendChild(script);
-
             setupEventListeners();
         });
         
-        // --- AUTH & SYNC ---
-        async function initializeGapiClient() { await gapi.client.init({ apiKey: API_KEY, discoveryDocs: DISCOVERY_DOCS }); }
-        function initializeGis() { tokenClient = google.accounts.oauth2.initTokenClient({ client_id: CLIENT_ID, scope: SCOPES, callback: handleTokenResponse, error_callback: handleGisError, }); tokenClient.requestAccessToken({prompt: 'none'}); }
-        async function handleTokenResponse(resp) { if (resp.error) { return; } gapi.client.setToken(resp); updateSigninStatus(true); await syncWithDrive(); }
-        function handleGisError(error) { console.log('Silent login failed.', error); updateSigninStatus(false); }
-        function handleAuthClick() { if (tokenClient) { if (gapi.client.getToken() === null) { tokenClient.requestAccessToken({prompt: 'consent'}); } else { tokenClient.requestAccessToken({prompt: ''}); } } }
-        function handleSignoutClick() { const token = gapi.client.getToken(); if (token !== null) { google.accounts.oauth2.revoke(token.access_token, () => { gapi.client.setToken(null); updateSigninStatus(false); }); } }
-        function updateSigninStatus(isSignedIn) { ui.authorizeButton.classList.toggle('hidden', isSignedIn); ui.userInfoDiv.classList.toggle('hidden', !isSignedIn); if (isSignedIn) { gapi.client.request({ path: 'https://www.googleapis.com/oauth2/v1/userinfo' }).then(response => { ui.userNameSpan.textContent = `Ciao, ${response.result.given_name}`; }); } else { ui.userNameSpan.textContent = ''; driveFileId = null; updateSyncStatus('offline'); } }
-        async function findOrCreateDriveFile() { const response = await gapi.client.drive.files.list({ q: `name='${DRIVE_FILENAME}' and trashed=false`, spaces: 'drive', fields: 'files(id, name)', }); if (response.result.files.length > 0) { return response.result.files[0].id; } const createResponse = await gapi.client.drive.files.create({ resource: { name: DRIVE_FILENAME, appProperties: {isFamilyExpenseApp: 'true'}, parents: ['root'] }, fields: 'id', }); return createResponse.result.id; }
-        async function loadFromDrive(fileId) { try { const response = await gapi.client.drive.files.get({ fileId, alt: 'media' }); return response.result; } catch (e) { console.error("Error loading from Drive:", e); return null; } }
-        async function saveToDrive(fileId, content) { updateSyncStatus('online'); const boundary = '-------314159265358979323846'; const multipartRequestBody = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name: DRIVE_FILENAME, mimeType: 'application/json' })}\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(content)}\r\n--${boundary}--`; try { await gapi.client.request({ path: `/upload/drive/v3/files/${fileId}`, method: 'PATCH', params: { uploadType: 'multipart' }, headers: { 'Content-Type': `multipart/related; boundary="${boundary}"` }, body: multipartRequestBody }); updateSyncStatus('synced'); } catch (error) { console.error("Error saving to Drive:", error); updateSyncStatus('offline'); } }
-        async function syncWithDrive() { if (!gapi.client.getToken()) return; updateSyncStatus('online'); if (!driveFileId) driveFileId = await findOrCreateDriveFile(); const driveData = await loadFromDrive(driveFileId); const localData = getStateFromLocal(); if (driveData && (!localData || driveData.lastModified > localData.lastModified)) { state = driveData; } saveState(); refreshUI(); }
-        function updateSyncStatus(status) { ui.syncStatusDot.className = 'sync-status-dot'; const statuses = { offline: { class: 'sync-offline', text: 'Offline' }, online: { class: 'sync-online', text: 'Sincronizzazione...' }, synced: { class: 'sync-synced', text: 'Sincronizzato' } }; ui.syncStatusDot.classList.add(statuses[status].class); ui.syncStatusText.textContent = statuses[status].text; }
-        function loadStateFromLocal() { const storedState = localStorage.getItem(LOCAL_STORAGE_KEY); if (storedState) state = JSON.parse(storedState); }
-        function getStateFromLocal() { return JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY)) || { lastModified: 0, transactions: [] }; }
-        function saveState() { state.lastModified = Date.now(); localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state)); if (gapi.client.getToken() && driveFileId) { saveToDrive(driveFileId, state); } }
+        function loadStateFromLocal() {
+            const storedState = localStorage.getItem(LOCAL_STORAGE_KEY);
+            if (storedState) state = JSON.parse(storedState);
+        }
 
-        // --- UI & CORE APP LOGIC ---
+        function saveState() {
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
+        }
+
         function refreshUI() {
             renderBalances();
             renderTransactions();
@@ -518,8 +469,6 @@
 
         // --- EVENT LISTENERS ---
         function setupEventListeners() {
-            ui.authorizeButton.onclick = handleAuthClick;
-            ui.signoutButton.onclick = handleSignoutClick;
             ui.addWeeklyIncomeBtn.onclick = () => handleAddIncome('weekly', 100);
             ui.addMonthlyIncomeBtn.onclick = () => handleAddIncome('monthly', 400);
             ui.addExpenseBtn.onclick = () => openExpenseModal();
