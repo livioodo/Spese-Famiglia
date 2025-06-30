@@ -25,7 +25,7 @@
             <div class="flex justify-between items-start">
                 <h1 class="text-3xl font-bold text-indigo-700">Gestionale Spese</h1>
                 <div class="flex items-center space-x-4">
-                     <div class="text-sm text-gray-500">Dati salvati su questo dispositivo</div>
+                    <div class="text-sm text-gray-500">Dati salvati su questo dispositivo</div>
                     <button id="toggleReportsBtn" class="p-2 rounded-md hover:bg-gray-200">
                         <i class="fas fa-chart-pie fa-lg text-gray-600"></i>
                     </button>
@@ -62,15 +62,7 @@
 
             <!-- Transactions List -->
             <section class="bg-white p-6 rounded-xl shadow-md mb-8">
-                <div class="flex flex-col sm:flex-row justify-between sm:items-center mb-4">
-                    <h2 class="text-2xl font-bold text-gray-800">Transazioni</h2>
-                    <div class="flex items-center space-x-2 mt-4 sm:mt-0">
-                         <button id="prevMonthBtn" class="p-2 rounded-md hover:bg-gray-200"><i class="fas fa-chevron-left"></i></button>
-                         <h3 id="currentMonthDisplay" class="text-lg font-semibold text-gray-700 w-40 text-center"></h3>
-                         <button id="nextMonthBtn" class="p-2 rounded-md hover:bg-gray-200"><i class="fas fa-chevron-right"></i></button>
-                         <button id="todayBtn" class="ml-2 px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 rounded-md">Oggi</button>
-                    </div>
-                </div>
+                <h2 class="text-2xl font-bold text-gray-800 mb-4">Ultime Transazioni</h2>
                 <div id="transactionsList" class="space-y-3 max-h-96 overflow-y-auto">
                     <!-- Transactions will be populated here -->
                 </div>
@@ -86,15 +78,9 @@
                 <i class="fas fa-times fa-lg text-gray-600"></i>
             </button>
         </div>
-        <div class="mb-6 flex items-center space-x-4">
-            <label for="viewToggle" class="font-semibold text-gray-700">Visualizza:</label>
-            <select id="viewToggle" class="bg-white border border-gray-300 rounded-md py-2 px-3">
-                <option value="month">Mese Corrente</option>
-                <option value="total">Totale</option>
-            </select>
-        </div>
         <div class="space-y-8">
-             <div>
+             <!-- Summary Table -->
+            <div>
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-100">
                         <tr>
@@ -107,6 +93,7 @@
                     <tbody id="summaryTableBody" class="bg-white divide-y divide-gray-200"></tbody>
                 </table>
             </div>
+            <!-- Charts -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
                  <div class="text-center p-4 bg-white rounded-lg shadow">
                     <h3 class="font-semibold text-gray-600 mb-2">Spese da €100</h3>
@@ -120,15 +107,6 @@
                     <h3 class="font-semibold text-gray-600 mb-2">Spese Totali</h3>
                     <canvas id="totalChart"></canvas>
                 </div>
-            </div>
-             <div class="mt-8 pt-4 border-t border-gray-200 space-y-2">
-                <button id="exportCsvBtn" class="w-full text-left bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-lg flex items-center">
-                   <i class="fas fa-file-csv fa-fw mr-3"></i> Esporta Backup (CSV)
-                </button>
-                <button id="importCsvBtn" class="w-full text-left bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-lg flex items-center">
-                   <i class="fas fa-file-import fa-fw mr-3"></i> Carica Backup (CSV)
-                </button>
-                <input type="file" id="csvFileInput" class="hidden" accept=".csv">
             </div>
         </div>
     </div>
@@ -189,7 +167,7 @@
 
 
     <script type="module">
-        const LOCAL_STORAGE_KEY = 'spese-famiglia-data-v3';
+        const LOCAL_STORAGE_KEY = 'spese-famiglia-data-v2';
 
         const EXPENSE_CATEGORIES = [
             { name: "Spesa Supermercato", color: "#36A2EB" },
@@ -202,8 +180,6 @@
         ];
         
         let state = { transactions: [] };
-        let currentDisplayDate = new Date();
-        let reportViewMode = 'month'; // 'month' or 'total'
         
         let weeklyChart, monthlyChart, totalChart;
         let ui;
@@ -231,21 +207,12 @@
                 toggleReportsBtn: document.getElementById('toggleReportsBtn'),
                 reportsSidebar: document.getElementById('reportsSidebar'),
                 reportsBackdrop: document.getElementById('reportsBackdrop'),
-                closeReportsBtn: document.getElementById('closeReportsBtn'),
-                prevMonthBtn: document.getElementById('prevMonthBtn'),
-                nextMonthBtn: document.getElementById('nextMonthBtn'),
-                todayBtn: document.getElementById('todayBtn'),
-                currentMonthDisplay: document.getElementById('currentMonthDisplay'),
-                viewToggle: document.getElementById('viewToggle'),
-                exportCsvBtn: document.getElementById('exportCsvBtn'),
-                importCsvBtn: document.getElementById('importCsvBtn'),
-                csvFileInput: document.getElementById('csvFileInput'),
+                closeReportsBtn: document.getElementById('closeReportsBtn')
             };
             
             Chart.register(ChartDataLabels);
             populateCategories();
             loadStateFromLocal();
-            exportDataToCsv(true);
             refreshUI();
             setupEventListeners();
         });
@@ -258,23 +225,11 @@
         function saveState() {
             localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
         }
-        
+
         function refreshUI() {
             renderBalances();
             renderTransactions();
-            updateMonthDisplay();
-            if (!ui.reportsSidebar.classList.contains('translate-x-full')) {
-                renderSummary();
-            }
-        }
-        
-        function getFilteredTransactions() {
-            const year = currentDisplayDate.getFullYear();
-            const month = currentDisplayDate.getMonth();
-            return state.transactions.filter(t => {
-                const tDate = new Date(t.date);
-                return tDate.getFullYear() === year && tDate.getMonth() === month;
-            });
+            renderSummary();
         }
 
         function renderBalances() {
@@ -285,7 +240,7 @@
                 if(t.type === 'income') {
                     if(t.fund === 'weekly') weekly += amount;
                     else monthly += amount;
-                } else {
+                } else { // expense
                     if(t.fund === 'weekly') weekly -= amount;
                     else monthly -= amount;
                 }
@@ -295,14 +250,13 @@
         }
 
         function renderTransactions() {
-            const monthlyTransactions = getFilteredTransactions();
             ui.transactionsList.innerHTML = '';
-            if (monthlyTransactions.length === 0) {
-                ui.transactionsList.innerHTML = '<p class="text-gray-500 text-center">Nessuna transazione per questo mese.</p>';
+            if (state.transactions.length === 0) {
+                ui.transactionsList.innerHTML = '<p class="text-gray-500 text-center">Nessuna transazione registrata.</p>';
                 return;
             }
-            const sorted = [...monthlyTransactions].sort((a,b) => new Date(b.date) - new Date(a.date));
-            sorted.slice(0, 50).forEach(t => {
+            const sorted = [...state.transactions].sort((a,b) => new Date(b.date) - new Date(a.date));
+            sorted.slice(0, 20).forEach(t => {
                 const isExpense = t.type === 'expense';
                 const category = EXPENSE_CATEGORIES.find(c => c.name === t.category);
                 const borderColor = isExpense ? (category ? category.color : '#9CA3AF') : (t.fund === 'weekly' ? '#22C55E' : '#3B82F6');
@@ -338,13 +292,12 @@
         }
         
         function renderSummary() {
-            const transactionsToSummarize = reportViewMode === 'month' ? getFilteredTransactions() : state.transactions;
             const summary = {};
             EXPENSE_CATEGORIES.forEach(cat => {
                 summary[cat.name] = { weekly: 0, monthly: 0, total: 0, color: cat.color };
             });
 
-            transactionsToSummarize.filter(t => t.type === 'expense').forEach(t => {
+            state.transactions.filter(t => t.type === 'expense').forEach(t => {
                 if (summary[t.category]) {
                     const amount = parseFloat(t.amount) || 0;
                     summary[t.category][t.fund] += amount;
@@ -411,32 +364,24 @@
                     datasets: [{
                         data: hasData ? data : [1],
                         backgroundColor: hasData ? colors : ['#E5E7EB'],
-                        borderColor: '#fff',
-                        borderWidth: 2,
                     }]
                 },
                 options: {
                     responsive: true,
-                    maintainAspectRatio: false,
                     plugins: {
                         legend: { display: false },
                         datalabels: {
                             display: hasData,
                             formatter: (value, ctx) => {
                                 let sum = ctx.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
-                                if (sum === 0) return '';
-                                let percentage = (value * 100 / sum).toFixed(0) + "%";
+                                let percentage = (value * 100 / sum).toFixed(1) + "%";
                                 const label = ctx.chart.data.labels[ctx.dataIndex];
-                                return `${label}\n${percentage}`;
+                                return `${label}\n€${value.toFixed(2)} (${percentage})`;
                             },
-                            color: '#1F2937',
-                            font: { weight: 'bold', size: 11 },
-                            anchor: 'end',
-                            align: 'end',
-                            offset: 8,
-                            borderRadius: 4,
-                            backgroundColor: 'rgba(255, 255, 255, 0.7)',
-                            padding: 4,
+                            color: '#fff',
+                            font: { weight: 'bold', size: 10 },
+                            textStrokeColor: '#333',
+                            textStrokeWidth: 2,
                         }
                     }
                 }
@@ -485,8 +430,11 @@
         async function handleDeleteTransaction(transactionId) {
             const transaction = state.transactions.find(t => t.id === transactionId);
             if (!transaction) return;
+
             const message = `Sei sicuro di voler eliminare questa transazione (${transaction.type === 'income' ? 'Entrata' : 'Spesa'}) di €${parseFloat(transaction.amount).toFixed(2)}?`;
+            
             const confirmed = await confirmAction('Conferma Eliminazione', message);
+
             if (confirmed) {
                 state.transactions = state.transactions.filter(t => t.id !== transactionId);
                 saveState();
@@ -500,105 +448,23 @@
             document.getElementById('confirmActionTitle').textContent = title;
             document.getElementById('confirmActionMessage').textContent = message;
             modal.style.display = 'flex';
+            
             return new Promise((resolve) => {
-                document.getElementById('confirmActionOk').onclick = () => { modal.style.display = 'none'; resolve(true); };
-                document.getElementById('confirmActionCancel').onclick = () => { modal.style.display = 'none'; resolve(false); };
+                document.getElementById('confirmActionOk').onclick = () => {
+                    modal.style.display = 'none';
+                    resolve(true);
+                };
+                document.getElementById('confirmActionCancel').onclick = () => {
+                    modal.style.display = 'none';
+                    resolve(false);
+                };
             });
         }
+
 
         function toggleReportsSidebar() {
-            const isOpening = ui.reportsSidebar.classList.contains('translate-x-full');
             ui.reportsSidebar.classList.toggle('translate-x-full');
             ui.reportsBackdrop.classList.toggle('hidden');
-            if (isOpening) {
-                ui.reportsSidebar.addEventListener('transitionend', function onTransitionEnd() {
-                    renderSummary();
-                    ui.reportsSidebar.removeEventListener('transitionend', onTransitionEnd);
-                }, { once: true });
-            }
-        }
-        
-        function changeMonth(offset) {
-            currentDisplayDate.setMonth(currentDisplayDate.getMonth() + offset);
-            refreshUI();
-        }
-
-        function updateMonthDisplay() {
-            const monthName = currentDisplayDate.toLocaleString('it-IT', { month: 'long' });
-            const year = currentDisplayDate.getFullYear();
-            ui.currentMonthDisplay.textContent = `${monthName.charAt(0).toUpperCase() + monthName.slice(1)} ${year}`;
-        }
-
-        function exportDataToCsv(isAutoBackup = false) {
-            if (state.transactions.length === 0 && isAutoBackup) return;
-            if (state.transactions.length === 0 && !isAutoBackup) { alert("Nessuna transazione da esportare."); return; }
-            
-            const headers = ["ID", "Data", "Tipo", "Importo", "Categoria", "Fondo", "Note"];
-            const rows = state.transactions.map(t => {
-                const cleanNotes = `"${(t.notes || '').replace(/"/g, '""')}"`;
-                return [t.id, t.date, t.type, t.amount, t.category || '', t.fund || '', cleanNotes];
-            });
-
-            const csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + rows.map(e => e.join(",")).join("\n");
-            const encodedUri = encodeURI(csvContent);
-            const link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
-            const dateStr = new Date().toISOString().split('T')[0];
-            link.setAttribute("download", `backup_spese_${dateStr}.csv`);
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        }
-        
-        function handleFileImport(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = async (e) => {
-                const text = e.target.result;
-                const confirmed = await confirmAction('Conferma Caricamento Backup', `Sei sicuro di voler sovrascrivere tutti i dati attuali con quelli del file? L'operazione non è reversibile.`);
-
-                if (confirmed) {
-                    try {
-                        const newTransactions = parseCSV(text);
-                        state.transactions = newTransactions;
-                        saveState();
-                        refreshUI();
-                        alert('Dati importati con successo!');
-                    } catch (error) {
-                        alert('Errore durante la lettura del file. Assicurati che sia un file CSV valido esportato da questa applicazione.');
-                        console.error("Errore nel parsing del CSV:", error);
-                    }
-                }
-            };
-            reader.readAsText(file);
-            event.target.value = '';
-        }
-
-        function parseCSV(text) {
-            const lines = text.trim().split('\n');
-            const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
-            const newTransactions = [];
-            
-            lines.slice(1).forEach(line => {
-                const values = line.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g).map(v => v.replace(/"/g, ''));
-                const row = headers.reduce((obj, header, index) => {
-                    obj[header] = values[index] || '';
-                    return obj;
-                }, {});
-
-                newTransactions.push({
-                    id: row['ID'] || crypto.randomUUID(),
-                    date: row['Data'],
-                    type: row['Tipo'],
-                    amount: row['Importo'],
-                    category: row['Categoria'],
-                    fund: row['Fondo'],
-                    notes: row['Note'],
-                });
-            });
-            return newTransactions;
         }
 
         // --- EVENT LISTENERS ---
@@ -610,13 +476,6 @@
             ui.toggleReportsBtn.onclick = toggleReportsSidebar;
             ui.closeReportsBtn.onclick = toggleReportsSidebar;
             ui.reportsBackdrop.onclick = toggleReportsSidebar;
-            ui.prevMonthBtn.onclick = () => changeMonth(-1);
-            ui.nextMonthBtn.onclick = () => changeMonth(1);
-            ui.todayBtn.onclick = () => { currentDisplayDate = new Date(); refreshUI(); };
-            ui.viewToggle.onchange = (e) => { reportViewMode = e.target.value; renderSummary(); };
-            ui.exportCsvBtn.onclick = () => exportDataToCsv(false);
-            ui.importCsvBtn.onclick = () => ui.csvFileInput.click();
-            ui.csvFileInput.onchange = handleFileImport;
             
             ui.transactionsList.addEventListener('click', (e) => {
                 const deleteBtn = e.target.closest('.delete-transaction-btn');
@@ -649,9 +508,9 @@
                 };
                 if (!expenseData.amount || !expenseData.category) return;
                 
-                if (id) {
+                if (id) { // Update
                     state.transactions = state.transactions.map(t => t.id === id ? expenseData : t);
-                } else {
+                } else { // Create
                     state.transactions.push(expenseData);
                 }
                 saveState();
